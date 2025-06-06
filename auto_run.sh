@@ -14,4 +14,5 @@ docker run --rm -p 8080:8080 \
     -v /Users/dennis/rust/rust-web-demo/static:/app/static \
     --name rust-demo \
     --link rust_postgres:postgres \
+    -e RUST_LOG=info \
     rust-demo
