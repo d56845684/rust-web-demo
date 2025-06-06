@@ -32,15 +32,29 @@ function renderTodos() {
     title.onclick = () => editTodo(todo);
 
     const controls = document.createElement("div");
+    controls.className = "controls";
 
     const toggleBtn = document.createElement("button");
     toggleBtn.textContent = todo.done ? "Undo" : "Done";
-    toggleBtn.className = todo.done ? "undo" : "done";
+    if (todo.done) {
+        toggleBtn.style.backgroundColor = "#e57373";
+        toggleBtn.style.color = "white";
+    } else {
+        toggleBtn.style.backgroundColor = "#2ecc71";
+        toggleBtn.style.color = "white";
+    }
     toggleBtn.onclick = () => toggle(todo.id);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "🗑";
     deleteBtn.onclick = () => remove(todo.id);
+
+    if (todo.done) {
+        const doneTag = document.createElement("span");
+        doneTag.textContent = "Done";
+        doneTag.className = "done-tag";
+        title.appendChild(doneTag);
+    }
 
     controls.appendChild(toggleBtn);
     controls.appendChild(deleteBtn);
@@ -65,6 +79,14 @@ async function addTodo() {
   input.value = "";
   fetchTodos();
 }
+
+// 添加按 Enter 鍵創建任務的功能
+document.getElementById("new-task").addEventListener("keypress", function(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addTodo();
+  }
+});
 
 async function toggle(id) {
   await fetch(`/todos/${id}/toggle`, { method: "POST" });
