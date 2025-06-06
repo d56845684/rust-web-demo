@@ -3,9 +3,13 @@ FROM rust:1.87.0-slim-bullseye AS builder
 
 WORKDIR /app
 COPY . .
-# 預先下載依賴 (提高建置效率)
+
+# Enable immediate exit on any error
+RUN set -e
+
+# Fetch dependencies and check for errors
 RUN cargo fetch
-RUN cargo check
+# RUN cargo check --message-format=json 1>&2 || exit 1
 RUN cargo build --release
 
 # 建立執行環境（較小）
