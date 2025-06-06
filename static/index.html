@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Rust To-Do List</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Rust To-Do List</h1>
+  <div class="input-section">
+    <input id="new-task" placeholder="Add a new task..." />
+    <button class="add" onclick="addTodo()">Add</button>
+  </div>
+
+  <div class="filters">
+    <button onclick="setFilter('all')">All</button>
+    <button onclick="setFilter('active')">Active</button>
+    <button onclick="setFilter('completed')">Completed</button>
+  </div>
+
+  <ul id="list"></ul>
+
+  <script src="app.js"></script>
+</body>
+</html>
