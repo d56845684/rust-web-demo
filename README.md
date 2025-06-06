@@ -39,6 +39,7 @@ cd rust-web-demo
 
 2. 運行應用程式：
 ```bash
+./auto_build.sh
 ./auto_run.sh
 ```
 
