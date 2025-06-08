@@ -99,7 +99,14 @@ async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
     
     // Create extension if it doesn't exist
     client.execute("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"", &[]).await?;
-    
+    // Create users table if it doesn't exist
+    client.execute(
+        "CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL
+        )",
+        &[]
+    ).await?;
     // Create todos table if it doesn't exist
     client.execute(
         "CREATE TABLE IF NOT EXISTS todos (
@@ -110,16 +117,6 @@ async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
         )",
         &[]
     ).await?;
-
-    // Create users table if it doesn't exist
-    client.execute(
-        "CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password TEXT NOT NULL
-        )",
-        &[]
-    ).await?;
-
     // Insert default user
     client.execute(
         "INSERT INTO users (username, password) VALUES ('admin', 'password') ON CONFLICT (username) DO NOTHING",
