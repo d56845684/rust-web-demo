@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 # Run PostgreSQL container
 docker stop rust-demo rust_postgres 2>/dev/null || true
 docker rm rust-demo rust_postgres 2>/dev/null || true
@@ -10,9 +13,11 @@ docker run -d --name rust_postgres \
     postgres:15
 
 # Run application container
-docker run --rm -p 8080:8080 \
-    -v /Users/dennis/rust/rust-web-demo/static:/app/static \
+APP_CONTAINER=$(docker run -d --rm -p 8080:8080 \
+    -v "$(pwd)/static:/app/static" \
     --name rust-demo \
     --link rust_postgres:postgres \
     -e RUST_LOG=info \
-    rust-demo
+    rust-demo)
+
+echo "Application container started with ID $APP_CONTAINER"
