@@ -27,6 +27,7 @@ struct Todo {
     id: String,
     title: String,
     done: bool,
+    username: String,
 }
 
 static JWT_SECRET: Lazy<String> = Lazy::new(|| "secret_key".to_string());
@@ -43,9 +44,39 @@ struct LoginRequest {
     password: String,
 }
 
+#[derive(Deserialize)]
+struct RegisterRequest {
+    username: String,
+    password: String,
+}
+
 #[derive(Serialize)]
 struct LoginResponse {
     token: String,
+}
+
+async fn register(info: web::Json<RegisterRequest>, pool: web::Data<Pool>) -> impl Responder {
+    match pool.get().await {
+        Ok(client) => {
+            match client.execute(
+                "INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING",
+                &[&info.username, &info.password]
+            ).await {
+                Ok(n) => {
+                    if n == 1 {
+                        HttpResponse::Ok().finish()
+                    } else {
+                        HttpResponse::BadRequest().body("User already exists")
+                    }
+                }
+                Err(e) => {
+                    error!("Register error: {}", e);
+                    HttpResponse::InternalServerError().finish()
+                }
+            }
+        }
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
 }
 
 fn authorize(req: &HttpRequest) -> Result<String, HttpResponse> {
@@ -74,7 +105,8 @@ async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
         "CREATE TABLE IF NOT EXISTS todos (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             title TEXT NOT NULL,
-            done BOOLEAN NOT NULL DEFAULT false
+            done BOOLEAN NOT NULL DEFAULT false,
+            username TEXT NOT NULL REFERENCES users(username)
         )",
         &[]
     ).await?;
@@ -98,23 +130,34 @@ async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn get_todos(req: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
-    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
-    info!("GET /todos - Fetching all todos");
+    let username = match authorize(&req) {
+        Ok(u) => u,
+        Err(e) => return e,
+    };
+    info!("GET /todos - Fetching todos for {}", username);
     match pool.get().await {
         Ok(client) => {
-            match client.query("SELECT id::text, title, done FROM todos", &[]).await {
+            match client.query(
+                "SELECT id::text, title, done, username FROM todos WHERE username = $1",
+                &[&username],
+            ).await {
                 Ok(rows) => {
-                    let todos: Vec<Todo> = rows.iter().map(|row| Todo {
-                        id: row.get(0),
-                        title: row.get(1),
-                        done: row.get(2),
-                    }).collect();
+                    let todos: Vec<Todo> = rows
+                        .iter()
+                        .map(|row| Todo {
+                            id: row.get(0),
+                            title: row.get(1),
+                            done: row.get(2),
+                            username: row.get(3),
+                        })
+                        .collect();
                     info!("GET /todos - Successfully fetched {} todos", todos.len());
                     HttpResponse::Ok().json(todos)
                 }
                 Err(e) => {
                     error!("GET /todos - Database query error: {}", e);
-                    HttpResponse::InternalServerError().json(format!("Database query error: {}", e))
+                    HttpResponse::InternalServerError()
+                        .json(format!("Database query error: {}", e))
                 }
             }
         }
@@ -126,19 +169,23 @@ async fn get_todos(req: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
 }
 
 async fn add_todo(req: HttpRequest, new: web::Json<NewTodo>, pool: web::Data<Pool>) -> impl Responder {
-    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
-    info!("POST /todos - Adding new todo: {:?}", new);
+    let username = match authorize(&req) {
+        Ok(u) => u,
+        Err(e) => return e,
+    };
+    info!("POST /todos - Adding new todo: {:?} for {}", new, username);
     match pool.get().await {
         Ok(client) => {
             match client.query_one(
-                "INSERT INTO todos (title, done) VALUES ($1, $2) RETURNING id::text, title, done",
-                &[&new.title, &new.done]
+                "INSERT INTO todos (title, done, username) VALUES ($1, $2, $3) RETURNING id::text, title, done, username",
+                &[&new.title, &new.done, &username]
             ).await {
                 Ok(row) => {
                     let todo = Todo {
                         id: row.get(0),
                         title: row.get(1),
                         done: row.get(2),
+                        username: row.get(3),
                     };
                     info!("POST /todos - Successfully added todo with id: {}", todo.id);
                     HttpResponse::Ok().json(todo)
@@ -157,20 +204,24 @@ async fn add_todo(req: HttpRequest, new: web::Json<NewTodo>, pool: web::Data<Poo
 }
 
 async fn toggle_done(req: HttpRequest, path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
-    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
+    let username = match authorize(&req) {
+        Ok(u) => u,
+        Err(e) => return e,
+    };
     let id = path.into_inner();
-    info!("POST /todos/{}/toggle - Toggling todo status", id);
+    info!("POST /todos/{}/toggle - Toggling todo status for {}", id, username);
     match pool.get().await {
         Ok(client) => {
             match client.query_one(
-                "UPDATE todos SET done = NOT done WHERE id::text = $1 RETURNING id::text, title, done",
-                &[&id]
+                "UPDATE todos SET done = NOT done WHERE id::text = $1 AND username = $2 RETURNING id::text, title, done, username",
+                &[&id, &username]
             ).await {
                 Ok(row) => {
                     let todo = Todo {
                         id: row.get(0),
                         title: row.get(1),
                         done: row.get(2),
+                        username: row.get(3),
                     };
                     info!("POST /todos/{}/toggle - Successfully toggled todo status", id);
                     HttpResponse::Ok().json(todo)
@@ -189,15 +240,26 @@ async fn toggle_done(req: HttpRequest, path: web::Path<String>, pool: web::Data<
 }
 
 async fn delete_todo(req: HttpRequest, path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
-    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
+    let username = match authorize(&req) {
+        Ok(u) => u,
+        Err(e) => return e,
+    };
     let id = path.into_inner();
-    info!("DELETE /todos/{} - Deleting todo", id);
+    info!("DELETE /todos/{} - Deleting todo for {}", id, username);
     match pool.get().await {
         Ok(client) => {
-            match client.execute("DELETE FROM todos WHERE id::text = $1", &[&id]).await {
-                Ok(_) => {
-                    info!("DELETE /todos/{} - Successfully deleted todo", id);
-                    HttpResponse::NoContent().finish()
+            match client.execute(
+                "DELETE FROM todos WHERE id::text = $1 AND username = $2",
+                &[&id, &username]
+            ).await {
+                Ok(rows) => {
+                    if rows == 1 {
+                        info!("DELETE /todos/{} - Successfully deleted todo", id);
+                        HttpResponse::NoContent().finish()
+                    } else {
+                        error!("DELETE /todos/{} - Todo not found", id);
+                        HttpResponse::NotFound().finish()
+                    }
                 }
                 Err(e) => {
                     error!("DELETE /todos/{} - Database delete error: {}", id, e);
@@ -213,21 +275,25 @@ async fn delete_todo(req: HttpRequest, path: web::Path<String>, pool: web::Data<
 }
 
 async fn update_todo(req: HttpRequest, path: web::Path<String>, item: web::Json<UpdateTodo>, pool: web::Data<Pool>) -> impl Responder {
-    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
+    let username = match authorize(&req) {
+        Ok(u) => u,
+        Err(e) => return e,
+    };
     let id = path.into_inner();
-    info!("PUT /todos/{} - Updating todo: {:?}", id, item);
+    info!("PUT /todos/{} - Updating todo for {}: {:?}", id, username, item);
     match pool.get().await {
         Ok(client) => {
             if let Some(new_title) = &item.title {
                 match client.query_one(
-                    "UPDATE todos SET title = $1 WHERE id::text = $2 RETURNING id::text, title, done",
-                    &[new_title, &id]
+                    "UPDATE todos SET title = $1 WHERE id::text = $2 AND username = $3 RETURNING id::text, title, done, username",
+                    &[new_title, &id, &username]
                 ).await {
                     Ok(row) => {
                         let todo = Todo {
                             id: row.get(0),
                             title: row.get(1),
                             done: row.get(2),
+                            username: row.get(3),
                         };
                         info!("PUT /todos/{} - Successfully updated todo", id);
                         HttpResponse::Ok().json(todo)
@@ -331,7 +397,9 @@ async fn main() -> std::io::Result<()> {
             .route("/todos", web::post().to(add_todo))
             .route("/todos/{id}/toggle", web::post().to(toggle_done))
             .route("/api/login", web::post().to(login))
+            .route("/api/register", web::post().to(register))
             .route("/login", web::get().to(|| async { NamedFile::open_async("./static/login.html").await }))
+            .route("/register", web::get().to(|| async { NamedFile::open_async("./static/register.html").await }))
             .route("/", web::get().to(|| async {
                 NamedFile::open_async("./static/index.html").await
             }))
