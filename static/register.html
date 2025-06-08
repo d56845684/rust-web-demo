@@ -2,32 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Login</title>
+  <title>Register</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>Login</h1>
+  <h1>Register</h1>
   <div class="input-section">
     <input id="username" placeholder="Username" />
     <input id="password" type="password" placeholder="Password" />
-    <button class="add" onclick="login()">Login</button>
+    <button class="add" onclick="register()">Register</button>
   </div>
-  <p>Don't have an account? <a href="/register">Register</a></p>
+  <p>Already have an account? <a href="/login">Login</a></p>
   <script>
-    async function login() {
+    async function register() {
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
-      const res = await fetch('/api/login', {
+      const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
       if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('token', data.token);
-        window.location.href = '/';
+        alert('Registration successful');
+        window.location.href = '/login';
       } else {
-        alert('Login failed');
+        const msg = await res.text();
+        alert(msg || 'Registration failed');
       }
     }
   </script>
