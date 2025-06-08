@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 # Build new image
 docker build -t rust-demo .
 
