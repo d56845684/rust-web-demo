@@ -5,14 +5,16 @@
   <title>Register</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <h1>Register</h1>
-  <div class="input-section">
-    <input id="username" placeholder="Username" />
-    <input id="password" type="password" placeholder="Password" />
-    <button class="add" onclick="register()">Register</button>
+<body class="auth">
+  <div class="auth-container">
+    <h1>Register</h1>
+    <div class="input-section">
+      <input id="username" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <button class="add" onclick="register()">Register</button>
+    </div>
+    <p>Already have an account? <a href="/login">Login</a></p>
   </div>
-  <p>Already have an account? <a href="/login">Login</a></p>
   <script>
     async function register() {
       const username = document.getElementById('username').value;

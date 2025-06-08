@@ -5,14 +5,16 @@
   <title>Login</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <h1>Login</h1>
-  <div class="input-section">
-    <input id="username" placeholder="Username" />
-    <input id="password" type="password" placeholder="Password" />
-    <button class="add" onclick="login()">Login</button>
+<body class="auth">
+  <div class="auth-container">
+    <h1>Login</h1>
+    <div class="input-section">
+      <input id="username" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <button class="add" onclick="login()">Login</button>
+    </div>
+    <p>Don't have an account? <a href="/register">Register</a></p>
   </div>
-  <p>Don't have an account? <a href="/register">Register</a></p>
   <script>
     async function login() {
       const username = document.getElementById('username').value;

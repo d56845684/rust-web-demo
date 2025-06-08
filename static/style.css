@@ -95,3 +95,38 @@ body {
     display: flex;
     gap: 8px;
   }
+
+body.auth {
+  background: #f0f2f5;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.auth-container {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 350px;
+}
+
+.auth-container .input-section {
+  flex-direction: column;
+}
+
+.auth-container input {
+  width: 100%;
+}
+
+.auth-container button {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.auth-container p {
+  text-align: center;
+}
