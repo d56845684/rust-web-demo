@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer, Responder, HttpResponse};
+use actix_web::{web, App, HttpServer, Responder, HttpResponse, HttpRequest};
 use actix_files::Files;
 use actix_files::NamedFile;
 use serde::{Deserialize, Serialize};
@@ -7,6 +7,9 @@ use deadpool_postgres::{Pool, Config};
 use tokio_postgres::NoTls;
 // use deadpool::managed::PoolError;
 use log::{info, error};
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
+use chrono::{Utc, Duration};
+use once_cell::sync::Lazy;
 
 #[derive(Deserialize, Debug)]
 struct UpdateTodo {
@@ -26,6 +29,40 @@ struct Todo {
     done: bool,
 }
 
+static JWT_SECRET: Lazy<String> = Lazy::new(|| "secret_key".to_string());
+
+#[derive(Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+}
+
+fn authorize(req: &HttpRequest) -> Result<String, HttpResponse> {
+    if let Some(header) = req.headers().get("Authorization") {
+        if let Ok(auth) = header.to_str() {
+            if auth.starts_with("Bearer ") {
+                let token = &auth[7..];
+                match decode::<Claims>(token, &DecodingKey::from_secret(JWT_SECRET.as_bytes()), &Validation::default()) {
+                    Ok(data) => return Ok(data.claims.sub),
+                    Err(_) => return Err(HttpResponse::Unauthorized().finish()),
+                }
+            }
+        }
+    }
+    Err(HttpResponse::Unauthorized().finish())
+}
+
 async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
     let client = pool.get().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     
@@ -41,11 +78,27 @@ async fn init_db(pool: &Pool) -> Result<(), Box<dyn std::error::Error>> {
         )",
         &[]
     ).await?;
-    
+
+    // Create users table if it doesn't exist
+    client.execute(
+        "CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL
+        )",
+        &[]
+    ).await?;
+
+    // Insert default user
+    client.execute(
+        "INSERT INTO users (username, password) VALUES ('admin', 'password') ON CONFLICT (username) DO NOTHING",
+        &[]
+    ).await?;
+
     Ok(())
 }
 
-async fn get_todos(pool: web::Data<Pool>) -> impl Responder {
+async fn get_todos(req: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
+    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
     info!("GET /todos - Fetching all todos");
     match pool.get().await {
         Ok(client) => {
@@ -72,7 +125,8 @@ async fn get_todos(pool: web::Data<Pool>) -> impl Responder {
     }
 }
 
-async fn add_todo(new: web::Json<NewTodo>, pool: web::Data<Pool>) -> impl Responder {
+async fn add_todo(req: HttpRequest, new: web::Json<NewTodo>, pool: web::Data<Pool>) -> impl Responder {
+    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
     info!("POST /todos - Adding new todo: {:?}", new);
     match pool.get().await {
         Ok(client) => {
@@ -102,7 +156,8 @@ async fn add_todo(new: web::Json<NewTodo>, pool: web::Data<Pool>) -> impl Respon
     }
 }
 
-async fn toggle_done(path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
+async fn toggle_done(req: HttpRequest, path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
+    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
     let id = path.into_inner();
     info!("POST /todos/{}/toggle - Toggling todo status", id);
     match pool.get().await {
@@ -133,7 +188,8 @@ async fn toggle_done(path: web::Path<String>, pool: web::Data<Pool>) -> impl Res
     }
 }
 
-async fn delete_todo(path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
+async fn delete_todo(req: HttpRequest, path: web::Path<String>, pool: web::Data<Pool>) -> impl Responder {
+    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
     let id = path.into_inner();
     info!("DELETE /todos/{} - Deleting todo", id);
     match pool.get().await {
@@ -156,7 +212,8 @@ async fn delete_todo(path: web::Path<String>, pool: web::Data<Pool>) -> impl Res
     }
 }
 
-async fn update_todo(path: web::Path<String>, item: web::Json<UpdateTodo>, pool: web::Data<Pool>) -> impl Responder {
+async fn update_todo(req: HttpRequest, path: web::Path<String>, item: web::Json<UpdateTodo>, pool: web::Data<Pool>) -> impl Responder {
+    if authorize(&req).is_err() { return HttpResponse::Unauthorized().finish(); }
     let id = path.into_inner();
     info!("PUT /todos/{} - Updating todo: {:?}", id, item);
     match pool.get().await {
@@ -189,6 +246,33 @@ async fn update_todo(path: web::Path<String>, item: web::Json<UpdateTodo>, pool:
             error!("PUT /todos/{} - Database connection error: {}", id, e);
             HttpResponse::InternalServerError().json(format!("Database connection error: {}", e))
         }
+    }
+}
+
+async fn login(info: web::Json<LoginRequest>, pool: web::Data<Pool>) -> impl Responder {
+    match pool.get().await {
+        Ok(client) => {
+            match client.query_one("SELECT password FROM users WHERE username = $1", &[&info.username]).await {
+                Ok(row) => {
+                    let stored: String = row.get(0);
+                    if stored == info.password {
+                        let exp = (Utc::now() + Duration::hours(24)).timestamp() as usize;
+                        let claims = Claims { sub: info.username.clone(), exp };
+                        match encode(&Header::default(), &claims, &EncodingKey::from_secret(JWT_SECRET.as_bytes())) {
+                            Ok(token) => HttpResponse::Ok().json(LoginResponse { token }),
+                            Err(e) => {
+                                error!("JWT encode error: {}", e);
+                                HttpResponse::InternalServerError().finish()
+                            }
+                        }
+                    } else {
+                        HttpResponse::Unauthorized().finish()
+                    }
+                }
+                Err(_) => HttpResponse::Unauthorized().finish(),
+            }
+        }
+        Err(_) => HttpResponse::InternalServerError().finish(),
     }
 }
 
@@ -246,6 +330,8 @@ async fn main() -> std::io::Result<()> {
             .route("/todos", web::get().to(get_todos))
             .route("/todos", web::post().to(add_todo))
             .route("/todos/{id}/toggle", web::post().to(toggle_done))
+            .route("/api/login", web::post().to(login))
+            .route("/login", web::get().to(|| async { NamedFile::open_async("./static/login.html").await }))
             .route("/", web::get().to(|| async {
                 NamedFile::open_async("./static/index.html").await
             }))
