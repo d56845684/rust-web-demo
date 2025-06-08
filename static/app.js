@@ -1,8 +1,11 @@
+const token = localStorage.getItem('token');
+if (!token) window.location.href = '/login';
+
 let todos = [];
 let currentFilter = 'all';
 
 async function fetchTodos() {
-  const res = await fetch("/todos");
+  const res = await fetch("/todos", { headers: { 'Authorization': `Bearer ${token}` } });
   todos = await res.json();
   renderTodos();
 }
@@ -72,7 +75,7 @@ async function addTodo() {
 
   await fetch("/todos", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ title, done: false })
   });
 
@@ -89,12 +92,12 @@ document.getElementById("new-task").addEventListener("keypress", function(event)
 });
 
 async function toggle(id) {
-  await fetch(`/todos/${id}/toggle`, { method: "POST" });
+  await fetch(`/todos/${id}/toggle`, { method: "POST", headers: { 'Authorization': `Bearer ${token}` } });
   fetchTodos();
 }
 
 async function remove(id) {
-  await fetch(`/todos/${id}`, { method: "DELETE" });
+  await fetch(`/todos/${id}`, { method: "DELETE", headers: { 'Authorization': `Bearer ${token}` } });
   fetchTodos();
 }
 
@@ -103,7 +106,7 @@ function editTodo(todo) {
   if (newTitle && newTitle.trim() !== "") {
     fetch(`/todos/${todo.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ title: newTitle.trim() })
     }).then(fetchTodos);
   }

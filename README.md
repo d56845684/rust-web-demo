@@ -56,6 +56,9 @@ cd rust-web-demo
 - `POST /todos/{id}/toggle` - 切換待辦事項的完成狀態
 - `DELETE /todos/{id}` - 刪除待辦事項
 - `GET /test-db` - 測試數據庫連接
+- `POST /api/login` - 使用者登入並取得 JWT
+
+登入頁面可透過 `/login` 進入，所有 Todo API 需在 `Authorization` header 中附帶 `Bearer <token>`。
 
 ## 數據庫結構
 
