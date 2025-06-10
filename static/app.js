@@ -4,6 +4,22 @@ if (!token) window.location.href = '/login';
 let todos = [];
 let currentFilter = 'all';
 
+// Initialize event listeners when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Add button click handler
+  document.getElementById('add-button').addEventListener('click', addTodo);
+  
+  // Filter buttons click handlers
+  document.querySelectorAll('.filter-btn').forEach(button => {
+    button.addEventListener('click', (e) => {
+      setFilter(e.target.dataset.filter);
+    });
+  });
+  
+  // Initial fetch
+  fetchTodos();
+});
+
 async function fetchTodos() {
   const res = await fetch("/todos", { headers: { 'Authorization': `Bearer ${token}` } });
   todos = await res.json();
