@@ -19,7 +19,7 @@ var db *sql.DB
 
 func initDB() error {
 	var err error
-	conn := "postgres://rust_user:rust_password@postgres:5432/rust_demo?sslmode=disable"
+	conn := "postgres://go_user:go_password@postgres:5432/go_demo?sslmode=disable"
 	db, err = sql.Open("postgres", conn)
 	if err != nil {
 		return err
