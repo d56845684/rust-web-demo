@@ -6,7 +6,7 @@ set -euo pipefail
 ./auto_run.sh
 
 # Ensure containers are stopped on exit
-trap 'docker stop go-demo rust_postgres >/dev/null 2>&1 || true' EXIT
+trap 'docker stop go-demo go_postgres >/dev/null 2>&1 || true' EXIT
 
 # Wait for server to be ready
 for i in {1..30}; do
