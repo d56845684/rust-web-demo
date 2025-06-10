@@ -1,22 +1,15 @@
-# 建立 Builder
-FROM rust:1.87.0-slim-bullseye AS builder
-
+FROM golang:1.22-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache git
+COPY go.mod .
+RUN go mod download
 COPY . .
+RUN go mod tidy
+RUN go build -o server
 
-# Enable immediate exit on any error
-RUN set -e
-
-# Fetch dependencies and check for errors
-RUN cargo fetch
-# RUN cargo check --message-format=json 1>&2 || exit 1
-RUN cargo build --release
-
-# 建立執行環境（較小）
-FROM debian:bullseye-slim
-
+FROM alpine
 WORKDIR /app
-COPY --from=builder /app/target/release/rust-web-demo .
+COPY --from=builder /app/server .
 COPY static ./static
 EXPOSE 8080
-CMD ["./rust-web-demo"]
+CMD ["./server"]
