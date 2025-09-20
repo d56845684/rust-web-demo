@@ -35,7 +35,11 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: http://backend:8080
+        # The frontend bundle runs in the user's browser, so requests must go
+        # through the host machine. Point the API base URL at the published
+        # backend port instead of the Docker service name to avoid DNS
+        # resolution issues in the browser.
+        VITE_API_BASE_URL: http://localhost:8080
     depends_on:
       - backend
     ports:
