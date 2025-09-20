@@ -18,7 +18,7 @@ export default function LoginPage() {
     try {
       const result = await loginRequest(username.trim(), password);
       login(result.token, username.trim());
-      navigate('/');
+      navigate('/todos', { replace: true });
     } catch (err) {
       setError('登入失敗，請確認帳號密碼是否正確');
     } finally {
