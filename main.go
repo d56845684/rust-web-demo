@@ -82,6 +82,18 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+// authMiddleware checks the Authorization header for a valid JWT
+// and stores the username in the request context.
+func authMiddleware(c *gin.Context) {
+	username, err := authorize(c)
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	c.Set("username", username)
+	c.Next()
+}
+
 func authorize(c *gin.Context) (string, error) {
 	auth := c.GetHeader("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
@@ -137,11 +149,7 @@ func login(c *gin.Context) {
 }
 
 func getTodos(c *gin.Context) {
-	username, err := authorize(c)
-	if err != nil {
-		c.Status(http.StatusUnauthorized)
-		return
-	}
+	username := c.GetString("username")
 	rows, err := db.Query(`SELECT id::text, title, done, username FROM todos WHERE username=$1`, username)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
@@ -161,18 +169,14 @@ func getTodos(c *gin.Context) {
 }
 
 func addTodo(c *gin.Context) {
-	username, err := authorize(c)
-	if err != nil {
-		c.Status(http.StatusUnauthorized)
-		return
-	}
+	username := c.GetString("username")
 	var n NewTodo
 	if err := c.BindJSON(&n); err != nil {
 		c.Status(http.StatusBadRequest)
 		return
 	}
 	var t Todo
-	err = db.QueryRow(`INSERT INTO todos (title, done, username) VALUES ($1,$2,$3) RETURNING id::text, title, done, username`, n.Title, n.Done, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
+	err := db.QueryRow(`INSERT INTO todos (title, done, username) VALUES ($1,$2,$3) RETURNING id::text, title, done, username`, n.Title, n.Done, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -181,14 +185,10 @@ func addTodo(c *gin.Context) {
 }
 
 func toggleTodo(c *gin.Context) {
-	username, err := authorize(c)
-	if err != nil {
-		c.Status(http.StatusUnauthorized)
-		return
-	}
+	username := c.GetString("username")
 	id := c.Param("id")
 	var t Todo
-	err = db.QueryRow(`UPDATE todos SET done = NOT done WHERE id::text=$1 AND username=$2 RETURNING id::text, title, done, username`, id, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
+	err := db.QueryRow(`UPDATE todos SET done = NOT done WHERE id::text=$1 AND username=$2 RETURNING id::text, title, done, username`, id, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -197,11 +197,7 @@ func toggleTodo(c *gin.Context) {
 }
 
 func deleteTodo(c *gin.Context) {
-	username, err := authorize(c)
-	if err != nil {
-		c.Status(http.StatusUnauthorized)
-		return
-	}
+	username := c.GetString("username")
 	id := c.Param("id")
 	res, err := db.Exec(`DELETE FROM todos WHERE id::text=$1 AND username=$2`, id, username)
 	if err != nil {
@@ -216,11 +212,7 @@ func deleteTodo(c *gin.Context) {
 }
 
 func updateTodo(c *gin.Context) {
-	username, err := authorize(c)
-	if err != nil {
-		c.Status(http.StatusUnauthorized)
-		return
-	}
+	username := c.GetString("username")
 	id := c.Param("id")
 	var upd UpdateTodo
 	if err := c.BindJSON(&upd); err != nil {
@@ -232,7 +224,7 @@ func updateTodo(c *gin.Context) {
 		return
 	}
 	var t Todo
-	err = db.QueryRow(`UPDATE todos SET title=$1 WHERE id::text=$2 AND username=$3 RETURNING id::text, title, done, username`, *upd.Title, id, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
+	err := db.QueryRow(`UPDATE todos SET title=$1 WHERE id::text=$2 AND username=$3 RETURNING id::text, title, done, username`, *upd.Title, id, username).Scan(&t.ID, &t.Title, &t.Done, &t.Username)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -262,11 +254,12 @@ func main() {
 	r.POST("/api/register", register)
 	r.POST("/api/login", login)
 
-	r.GET("/todos", getTodos)
-	r.POST("/todos", addTodo)
-	r.PUT("/todos/:id", updateTodo)
-	r.POST("/todos/:id/toggle", toggleTodo)
-	r.DELETE("/todos/:id", deleteTodo)
+	todos := r.Group("/todos", authMiddleware)
+	todos.GET("", getTodos)
+	todos.POST("", addTodo)
+	todos.PUT("/:id", updateTodo)
+	todos.POST("/:id/toggle", toggleTodo)
+	todos.DELETE("/:id", deleteTodo)
 
 	r.GET("/test-db", testDB)
 
