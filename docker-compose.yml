@@ -3,10 +3,12 @@ version: "3.9"
 services:
   postgres:
     image: postgres:15-alpine
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: go_user
-      POSTGRES_PASSWORD: go_password
-      POSTGRES_DB: go_demo
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -16,11 +18,18 @@ services:
     build: .
     depends_on:
       - postgres
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgres://go_user:go_password@postgres:5432/go_demo?sslmode=disable
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVER_PORT: ${SERVER_PORT}
+      SERVER_HOST: ${SERVER_HOST}
+      GIN_MODE: ${GIN_MODE}
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT}:${SERVER_PORT}"
 
   frontend:
     build:
