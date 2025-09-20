@@ -19,14 +19,18 @@ export default function App() {
     <Routes>
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
+        element={isAuthenticated ? <Navigate to="/todos" replace /> : <LoginPage />}
       />
       <Route
         path="/register"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />}
+        element={isAuthenticated ? <Navigate to="/todos" replace /> : <RegisterPage />}
       />
       <Route
         path="/"
+        element={<Navigate to={isAuthenticated ? '/todos' : '/login'} replace />}
+      />
+      <Route
+        path="/todos"
         element={(
           <PrivateRoute>
             <TodoPage />
@@ -35,7 +39,7 @@ export default function App() {
       />
       <Route
         path="*"
-        element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />}
+        element={<Navigate to={isAuthenticated ? '/todos' : '/login'} replace />}
       />
     </Routes>
   );
