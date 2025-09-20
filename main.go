@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -19,7 +20,10 @@ var db *sql.DB
 
 func initDB() error {
 	var err error
-	conn := "postgres://go_user:go_password@postgres:5432/go_demo?sslmode=disable"
+	conn := os.Getenv("DATABASE_URL")
+	if conn == "" {
+		conn = "postgres://go_user:go_password@postgres:5432/go_demo?sslmode=disable"
+	}
 	db, err = sql.Open("postgres", conn)
 	if err != nil {
 		return err
@@ -107,6 +111,61 @@ func authorize(c *gin.Context) (string, error) {
 		}
 	}
 	return "", errors.New("unauthorized")
+}
+
+func allowedOrigins() []string {
+	raw := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if raw == "" {
+		return []string{"*"}
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	if len(origins) == 0 {
+		return []string{"*"}
+	}
+	return origins
+}
+
+func corsMiddleware() gin.HandlerFunc {
+	origins := allowedOrigins()
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if len(origins) == 1 && origins[0] == "*" {
+			if origin == "" {
+				c.Header("Access-Control-Allow-Origin", "*")
+			} else {
+				c.Header("Access-Control-Allow-Origin", origin)
+			}
+		} else if isOriginAllowed(origin, origins) {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+		c.Header("Vary", "Origin")
+		c.Header("Access-Control-Allow-Headers", "Origin, Authorization, Content-Type")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
+
+func isOriginAllowed(origin string, allowed []string) bool {
+	if origin == "" {
+		return false
+	}
+	for _, item := range allowed {
+		if strings.EqualFold(item, origin) {
+			return true
+		}
+	}
+	return false
 }
 
 func register(c *gin.Context) {
@@ -246,6 +305,7 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.Use(corsMiddleware())
 	r.Static("/static", "./static")
 	r.GET("/", func(c *gin.Context) { c.File("./static/index.html") })
 	r.GET("/login", func(c *gin.Context) { c.File("./static/login.html") })

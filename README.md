@@ -1,10 +1,11 @@
 # Go Web Demo
 
-這是一個使用 Go 和 Gin 框架構建的簡單待辦事項（Todo）應用程式，
+這是一個使用 Go、Gin 與 React 建構的簡單待辦事項（Todo）應用程式，
 使用 PostgreSQL 作為資料庫並提供完整的 CRUD 操作。
 
 ## 功能特點
 
+- React SPA 前端
 - RESTful API 端點
 - PostgreSQL 數據庫整合
 - Docker 容器化支援
@@ -18,7 +19,7 @@
 - Go
 - Gin
 - PostgreSQL
-- Docker
+- Docker & Docker Compose
 - JWT 驗證
 - database/sql 與 pq 驅動
 
@@ -27,7 +28,7 @@
 - Go (最新穩定版)
 - Docker
 - Docker Compose
-- PostgreSQL（若未在 Docker 中執行）
+- Node.js (若要在本地直接執行前端)
 
 ## 快速開始
 
@@ -37,16 +38,26 @@ git clone <repository-url>
 cd rust-web-demo
 ```
 
-2. 啟動應用程式：
+2. 透過 Docker Compose 啟動整個系統：
 ```bash
-./auto_build.sh
-./auto_run.sh
+docker compose up --build
 ```
 
-腳本會：
-- 停止並移除現有容器
-- 建立並啟動 PostgreSQL 容器
-- 建構並執行 Go 應用程式
+這會啟動三個服務：
+
+- `postgres`：PostgreSQL 15 資料庫
+- `backend`：Go API 服務，執行於 `http://localhost:8080`
+- `frontend`：React 應用，執行於 `http://localhost:3000`
+
+3. （可選）本地啟動前端 React 開發伺服器：
+
+```bash
+cd frontend
+npm install
+npm run dev -- --host
+```
+
+預設會從 `VITE_API_BASE_URL` 環境變數讀取 API 位址，若未設定則使用 `http://localhost:8080`。
 
 ## API 端點
 
@@ -59,8 +70,8 @@ cd rust-web-demo
 - `POST /api/login` - 使用者登入取得 JWT
 - `POST /api/register` - 使用者註冊
 
-登入頁面位於 `/login`，所有 Todo API 需在 `Authorization`
-header 中附帶 `Bearer <token>`。
+所有 Todo API 需在 `Authorization` header 中附帶 `Bearer <token>`。
+使用 Docker Compose 啟動後，可於瀏覽器造訪 `http://localhost:3000` 操作完整介面。
 
 ## 數據庫結構
 
@@ -81,14 +92,15 @@ CREATE TABLE todos (
 ./auto_build.sh
 ```
 
-### 環境變量
+### 環境變數
 
-- 資料庫配置（程式碼中設定）：
-  - 主機：postgres
-  - 端口：5432
-  - 數據庫名：go_demo
-  - 用戶名：go_user
-  - 密碼：go_password
+| 名稱 | 作用 | 預設值 |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL 連線字串 | `postgres://go_user:go_password@postgres:5432/go_demo?sslmode=disable` |
+| `CORS_ALLOWED_ORIGINS` | 允許跨來源的前端網址（逗號分隔） | `*` |
+| `VITE_API_BASE_URL` | 前端請求 API 的基底位址 | `http://localhost:8080` |
+
+前端在 Docker 中建置時會將 `VITE_API_BASE_URL` 當成建置時常數，若需指向其他位址可以在 `docker compose` 中調整 build args。
 
 ## 項目結構
 
@@ -96,10 +108,13 @@ CREATE TABLE todos (
 rust-web-demo/
 ├── main.go          # 主應用程式程式碼
 ├── go.mod           # Go 依賴配置
+├── go.sum
 ├── static/          # 靜態檔案
-├── Dockerfile       # Docker 構建設定
+├── Dockerfile       # 後端 Docker 構建設定
+├── docker-compose.yml
 ├── auto_run.sh      # 自動執行腳本
-└── auto_build.sh    # 自動構建腳本
+├── auto_build.sh    # 自動構建腳本
+└── frontend/        # React 前端專案
 ```
 
 ## 日誌
