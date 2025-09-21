@@ -4,32 +4,13 @@
   <meta charset="UTF-8" />
   <title>Register</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 </head>
 <body>
-  <h1>Register</h1>
-  <div class="input-section">
-    <input id="username" placeholder="Username" />
-    <input id="password" type="password" placeholder="Password" />
-    <button class="add" onclick="register()">Register</button>
-  </div>
-  <p>Already have an account? <a href="/login">Login</a></p>
-  <script>
-    async function register() {
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        alert('Registration successful');
-        window.location.href = '/login';
-      } else {
-        const msg = await res.text();
-        alert(msg || 'Registration failed');
-      }
-    }
-  </script>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="env,react" src="/static/register.js"></script>
 </body>
 </html>
+
